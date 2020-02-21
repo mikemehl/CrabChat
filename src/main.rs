@@ -6,8 +6,20 @@ pub mod CrabChatServer
     {
         let listener = std::net::TcpListener::bind("127.0.0.1:4098")?;
 
-        for stream in listener.incoming() {
-            handle_client(stream?);
+        for stream in listener.incoming() 
+        {
+            match stream
+            {
+                Ok(stream) =>
+                {
+                    println!("Connecting!!!");
+                    std::thread::spawn(move || 
+                    {
+                        handle_client(stream);
+                    });
+                },
+                Err(e) => { println!("ERROR CONNECTING"); }
+            }
         }
 
         drop(listener);
