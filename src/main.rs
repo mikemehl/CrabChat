@@ -5,9 +5,7 @@ pub mod CrabChatServer
     use std::net::{TcpListener, TcpStream};
     use std::thread;
 
-    pub type StreamArc = Arc<Mutex<TcpStream>>;
-    pub type ClientListArc = Arc<Mutex<Vec<StreamArc>>>;
-    pub type OutMsgQArc = Arc<Mutex<Vec<String>>>;
+    pub type ClientListArc = Arc<Mutex<Vec<TcpStream>>>;
 
     pub fn start_server() -> std::io::Result<()>
     {
@@ -20,9 +18,10 @@ pub mod CrabChatServer
 
         // Spawn the write thread.
         let (tx, rx) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
+        let client_clone = client_list.clone();
         thread::spawn(move || 
         {
-            write_thread(rx, client_list.clone());
+            write_thread(rx, client_clone);
         });
 
         for mut stream in listener.incoming() 
@@ -34,8 +33,10 @@ pub mod CrabChatServer
                     println!("Connecting!!!");
 
                     // Remember, calling functions on variables moves ownership!
-                    // So, we need to copy the reference to be used below.
-                    add_client(stream, Arc::clone(&client_list), tx.clone());
+                    // So, clone the things we don't want to lose ownership of.
+                    let client_clone = client_list.clone();
+                    let tx_clone = tx.clone();
+                    add_client(stream, client_clone, tx_clone);
                 },
                 Err(e) => { println!("ERROR CONNECTING"); }
             }
@@ -45,28 +46,14 @@ pub mod CrabChatServer
         Ok(())
     }
 
-    fn add_client(mut stream : TcpStream, client_list : ClientListArc, tx : mpsc::Sender<String>)
+    fn add_client(stream : TcpStream, 
+                  client_list : ClientListArc, 
+                  tx : mpsc::Sender<String>)
     {
         println!("Added new client...");
         thread::spawn(move ||
         {
             // The read thread for this client.
-            let mut data = [0 as u8; 4096];
-            while match read_stream.lock().unwrap().read(&mut data)
-            {
-                Ok(msg) => 
-                {
-                    let msg = String::from_utf8(data.to_vec()).expect("INVALID MESSAGE");
-                    println!("Msg received: {}", msg);
-                    tx.send(msg);
-                    true
-                },
-                Err(e) => 
-                {
-                    println!("Something has gone horribly wrong!!");
-                    false
-                }
-            } {} // } ends match scope, {} is actually the while loop body.
         });
     }
 
