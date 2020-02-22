@@ -1,6 +1,6 @@
 pub mod CrabChatServer
 {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, mpsc};
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::thread;
@@ -17,7 +17,13 @@ pub mod CrabChatServer
         // Atomic Reference Count (Arc) so that we can allow multiple threads to use it (but not
         // simultaneously). This looks like the way things are done in Rust.
         let client_list : ClientListArc = Arc::new(Mutex::new(Vec::new()));
-        let msg_q : OutMsgQArc = Arc::new(Mutex::new(Vec::new()));
+
+        // Spawn the write thread.
+        let (tx, rx) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
+        thread::spawn(move || 
+        {
+            write_thread(rx, client_list.clone());
+        });
 
         for mut stream in listener.incoming() 
         {
@@ -29,7 +35,7 @@ pub mod CrabChatServer
 
                     // Remember, calling functions on variables moves ownership!
                     // So, we need to copy the reference to be used below.
-                    add_client(stream, Arc::clone(&client_list), Arc::clone(&msg_q));
+                    add_client(stream, Arc::clone(&client_list), tx.clone());
                 },
                 Err(e) => { println!("ERROR CONNECTING"); }
             }
@@ -39,13 +45,9 @@ pub mod CrabChatServer
         Ok(())
     }
 
-    fn add_client(mut stream : TcpStream, client_list : ClientListArc, msg_q : OutMsgQArc)
+    fn add_client(mut stream : TcpStream, client_list : ClientListArc, tx : mpsc::Sender<String>)
     {
-        println!("WE GOT EM");
-        // The stream needs to be accessed from multiple threads still (UGHHHH). 
-        // So, let's follow the pattern lol.
-        let read_stream = Arc::new(Mutex::new(stream));
-        client_list.lock().unwrap().push(Arc::clone(&read_stream));
+        println!("Added new client...");
         thread::spawn(move ||
         {
             // The read thread for this client.
@@ -54,8 +56,9 @@ pub mod CrabChatServer
             {
                 Ok(msg) => 
                 {
-                    println!("Got the message ok...");
-                    msg_q.lock().unwrap().push("MESSAGE".to_string());
+                    let msg = String::from_utf8(data.to_vec()).expect("INVALID MESSAGE");
+                    println!("Msg received: {}", msg);
+                    tx.send(msg);
                     true
                 },
                 Err(e) => 
@@ -67,11 +70,13 @@ pub mod CrabChatServer
         });
     }
 
-    fn write_thread()
+    fn write_thread(rx : mpsc::Receiver<String>, client_list : ClientListArc)
     {
-        // Loops forever trying to send any collected outgoing messages.
+        loop
+        {
+            let next_msg = rx.recv().unwrap();
+        }
     }
-
 }
 
 fn main() {
