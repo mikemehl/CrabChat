@@ -5,23 +5,21 @@ pub mod CrabChatServer
     use std::net::{TcpListener, TcpStream};
     use std::thread;
 
-    pub type ClientListArc = Arc<Mutex<Vec<TcpStream>>>;
+    enum ThreadMsg
+    {
+        NewConnection(Arc<Mutex<TcpStream>>),
+        NewMessage(String),
+    }
 
     pub fn start_server() -> std::io::Result<()>
     {
         let listener = TcpListener::bind("127.0.0.1:4098")?;
 
-        // Alright, create out client list. Dynamically allocate and wrap it up in a mutex and
-        // Atomic Reference Count (Arc) so that we can allow multiple threads to use it (but not
-        // simultaneously). This looks like the way things are done in Rust.
-        let client_list : ClientListArc = Arc::new(Mutex::new(Vec::new()));
-
         // Spawn the write thread.
-        let (tx, rx) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
-        let client_clone = client_list.clone();
+        let (tx, rx) : (mpsc::Sender<ThreadMsg>, mpsc::Receiver<ThreadMsg>) = mpsc::channel();
         thread::spawn(move || 
         {
-            write_thread(rx, client_clone);
+            write_thread(rx);
         });
 
         for mut stream in listener.incoming() 
@@ -34,9 +32,8 @@ pub mod CrabChatServer
 
                     // Remember, calling functions on variables moves ownership!
                     // So, clone the things we don't want to lose ownership of.
-                    let client_clone = client_list.clone();
                     let tx_clone = tx.clone();
-                    add_client(stream, client_clone, tx_clone);
+                    add_client(stream, tx_clone);
                 },
                 Err(e) => { println!("ERROR CONNECTING"); }
             }
@@ -47,21 +44,23 @@ pub mod CrabChatServer
     }
 
     fn add_client(stream : TcpStream, 
-                  client_list : ClientListArc, 
-                  tx : mpsc::Sender<String>)
+                  tx : mpsc::Sender<ThreadMsg>)
     {
         println!("Added new client...");
         thread::spawn(move ||
         {
             // The read thread for this client.
+            loop
+            {
+            }
         });
     }
 
-    fn write_thread(rx : mpsc::Receiver<String>, client_list : ClientListArc)
+    fn write_thread(rx : mpsc::Receiver<ThreadMsg>)
     {
         loop
         {
-            let next_msg = rx.recv().unwrap();
+            let next_msg = rx.recv();
         }
     }
 }
