@@ -64,7 +64,11 @@ pub mod CrabChatServer
                 {
                     Ok(msg) =>
                     {
-                        // TODO: Send the message to the client! 
+                        match(msg)
+                        {
+                            ThreadMsg::NewMessage(msg) => { stream.write(msg.as_bytes()); },
+                            ThreadMsg::NewConnection(e) => { println!("OH NOES"); }
+                        } 
                     },
                     Err(e) => { println!("ERROR RECEIVING MESSAGE FROM WRITE THREAD"); }
                 }
@@ -77,6 +81,16 @@ pub mod CrabChatServer
                     Ok(msg) =>
                     {
                         // TODO: Send the message to the write thread!   
+                        let data_str = String::from_utf8(data_buf.to_vec());
+                        match(data_str)
+                        {
+                            Ok(msg) => 
+                            {
+                                let out_msg = ThreadMsg::NewMessage(msg);
+                                tx_write.send(out_msg);
+                            },
+                            Err(e) => { println!("SUPER OH NOES"); }
+                        }
                     },
                     Err(ref e) if e.kind() == ErrorKind::WouldBlock =>
                     {
