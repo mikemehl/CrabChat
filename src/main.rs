@@ -60,17 +60,17 @@ pub mod CrabChatServer
             {
                 // First, check if we've received anything to echo from the write thread.
                 let write_thread_msg = rx.try_recv();
-                match(write_thread_msg)
+                if let Ok(msg) = write_thread_msg
                 {
-                    Ok(msg) =>
+                    match(msg)
                     {
-                        match(msg)
-                        {
-                            ThreadMsg::NewMessage(msg) => { stream.write(msg.as_bytes()); },
-                            ThreadMsg::NewConnection(e) => { println!("OH NOES"); }
-                        } 
-                    },
-                    Err(e) => { println!("ERROR RECEIVING MESSAGE FROM WRITE THREAD"); }
+                        ThreadMsg::NewMessage(msg) => { stream.write(msg.as_bytes()); },
+                        ThreadMsg::NewConnection(e) => { println!("OH NOES"); }
+                    } 
+                }
+                else
+                {
+                    println!("ERROR RECEIVING MESSAGE FROM WRITE THREAD");
                 }
 
                 // Then, check for any incoming messages from the socket.
@@ -80,16 +80,16 @@ pub mod CrabChatServer
                 {
                     Ok(msg) =>
                     {
-                        // TODO: Send the message to the write thread!   
+                        // Send the message to the write thread!   
                         let data_str = String::from_utf8(data_buf.to_vec());
-                        match(data_str)
+                        if let Ok(msg) = data_str
                         {
-                            Ok(msg) => 
-                            {
-                                let out_msg = ThreadMsg::NewMessage(msg);
-                                tx_write.send(out_msg);
-                            },
-                            Err(e) => { println!("SUPER OH NOES"); }
+                            let out_msg = ThreadMsg::NewMessage(msg);
+                            tx_write.send(out_msg);
+                        }
+                        else
+                        {
+                            println!("SUPER OH NOES");
                         }
                     },
                     Err(ref e) if e.kind() == ErrorKind::WouldBlock =>
@@ -108,21 +108,21 @@ pub mod CrabChatServer
         loop
         {
             let next_msg = rx.recv();
-            match(next_msg)
+            if let Ok(msg) = next_msg
             {
-                Ok(msg) =>
+                // Handle the message by type.
+                match(msg)
                 {
-                    // Handle the message by type.
-                    match(msg)
+                    ThreadMsg::NewConnection(tx_channel) => { channel_list.push(tx_channel); },
+                    ThreadMsg::NewMessage(msg) =>
                     {
-                        ThreadMsg::NewConnection(tx_channel) => { channel_list.push(tx_channel); },
-                        ThreadMsg::NewMessage(msg) =>
-                        {
-                            // TODO: Send the message to all threads.
-                        }
+                        // TODO: Send the message to all threads.
                     }
-                },
-                Err(e) => { println!("Error receiving message!!!"); }
+                }
+            }
+            else
+            {
+                println!("Error receiving message!!!"); 
             }
         }
     }
